@@ -1,0 +1,98 @@
+# augment_pipeline.py
+import tensorflow as tf
+from tensorflow.keras import layers
+
+# --- Paths to your processed images ---
+TRAIN_DIR = r"C:\Users\ChandaKK\OneDrive\School\Masters\UP - MIT\Semester 2\COS 801\Assignment\Dataset\train_96pad"   # folder with 12 class subfolders
+TEST_DIR  = r"C:\Users\ChandaKK\OneDrive\School\Masters\UP - MIT\Semester 2\COS 801\Assignment\Dataset\test_96pad"    # flat folder or subfolders (labels not used)
+IMG_SIZE  = (96, 96)
+BATCH     = 32
+SEED      = 42
+VAL_SPLIT = 0.15
+
+# 1) Load TRAIN + VAL from folder structure
+train_ds = tf.keras.utils.image_dataset_from_directory(
+    TRAIN_DIR,
+    validation_split=VAL_SPLIT,
+    subset="training",
+    seed=SEED,
+    image_size=IMG_SIZE,
+    batch_size=BATCH,
+    label_mode="categorical",   # one-hot for softmax
+)
+
+val_ds = tf.keras.utils.image_dataset_from_directory(
+    TRAIN_DIR,
+    validation_split=VAL_SPLIT,
+    subset="validation",
+    seed=SEED,
+    image_size=IMG_SIZE,
+    batch_size=BATCH,
+    label_mode="categorical",
+)
+
+# 2) Load TEST (no labels expected)
+test_ds = tf.keras.utils.image_dataset_from_directory(
+    TEST_DIR,
+    image_size=IMG_SIZE,
+    batch_size=BATCH,
+    label_mode=None,            # unlabeled
+    shuffle=False               # keep order for mapping preds to files
+)
+
+# 3) Normalization to [0,1] (done on-the-fly)
+normalizer = layers.Rescaling(1./255)
+
+# 4) Augmentation (train-only). Keep it modest for small images.
+#    - Flips: both directions (plants are largely orientation invariant)
+#    - Rotation: ~±10%
+#    - Zoom: ±10% (both H and W)
+#    - Contrast: ±10%
+#    - Brightness: ~±10% via a small Lambda wrapper (tf.image.random_brightness)
+def random_brightness(x):
+    # delta ~ ±0.10 in [0,1] space; clip back to [0,1]
+    x = tf.image.random_brightness(x, max_delta=0.10)
+    return tf.clip_by_value(x, 0.0, 1.0)
+
+augment = tf.keras.Sequential(
+    [
+        layers.RandomFlip("horizontal_and_vertical", seed=SEED),
+        layers.RandomRotation(0.10, seed=SEED),
+        layers.RandomZoom(height_factor=(-0.10, 0.10), width_factor=(-0.10, 0.10), seed=SEED),
+        layers.RandomContrast(0.10, seed=SEED),
+        layers.Lambda(random_brightness, name="RandomBrightness"),
+    ],
+    name="data_augmentation",
+)
+
+# 5) Build pipelined datasets
+AUTOTUNE = tf.data.AUTOTUNE
+
+def prep_train(ds):
+    return (
+        ds.map(lambda x, y: (normalizer(x), y), num_parallel_calls=AUTOTUNE)  # scale to [0,1]
+          .map(lambda x, y: (augment(x, training=True), y), num_parallel_calls=AUTOTUNE)
+          .shuffle(buffer_size=len(ds)*BATCH, seed=SEED, reshuffle_each_iteration=True)
+          .prefetch(AUTOTUNE)
+    )
+
+def prep_eval(ds):
+    # val/test: normalize only (NO augmentation)
+    return ds.map(lambda x, *y: (normalizer(x),) + y, num_parallel_calls=AUTOTUNE).prefetch(AUTOTUNE)
+
+train_ds_aug = prep_train(train_ds)
+val_ds_norm  = prep_eval(val_ds)
+test_ds_norm = prep_eval(test_ds)
+
+# 6) (Optional) Peek at a few augmented samples
+if __name__ == "__main__":
+    import matplotlib.pyplot as plt
+    for batch, labels in train_ds_aug.take(1):
+        plt.figure(figsize=(8, 6))
+        for i in range(8):
+            ax = plt.subplot(2, 4, i+1)
+            plt.imshow(batch[i].numpy())
+            plt.axis("off")
+        plt.suptitle("Augmented training samples")
+        plt.tight_layout()
+        plt.show()

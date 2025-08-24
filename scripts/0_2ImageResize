@@ -1,0 +1,148 @@
+"""
+resize_with_padding.py
+----------------------
+Batch-resize images with aspect-ratio preserving padding and RGB conversion.
+
+- Preserves folder structure from INPUT_DIR into OUTPUT_DIR
+- Uses Pillow (PIL) ImageOps.pad with LANCZOS (antialiasing)
+- Skips non-image files
+- Skips already-processed files unless OVERWRITE=True
+- Writes a CSV error log if any files fail to process
+
+How to use:
+1) Set INPUT_DIR, OUTPUT_DIR, TARGET_SIZE below.
+2) In VS Code terminal:  python resize_with_padding.py
+3) Re-run with different INPUT_DIR/OUTPUT_DIR for 'test' if needed.
+"""
+
+import os
+import csv
+from pathlib import Path
+from PIL import Image, ImageOps
+
+# ----------------- USER SETTINGS -----------------
+# Set these paths for your run:
+INPUT_DIR  = r"C:\Users\ChandaKK\OneDrive\School\Masters\UP - MIT\Semester 2\COS 801\Assignment\Dataset\test"
+OUTPUT_DIR = r"C:\Users\ChandaKK\OneDrive\School\Masters\UP - MIT\Semester 2\COS 801\Assignment\Dataset\test_96pad"
+
+# Target square size (e.g., 96 for 96x96). Change if you test other sizes.
+TARGET_SIZE = 96
+
+# Background padding color (RGB). Black (0,0,0) is typical; white is (255,255,255).
+PAD_COLOR = (0, 0, 0)
+
+# If True, will overwrite existing files in OUTPUT_DIR; if False, will skip them.
+OVERWRITE = False
+# -------------------------------------------------
+
+
+# Allowed image file extensions
+IMG_EXTS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
+
+# Error log path
+ERROR_LOG = Path(OUTPUT_DIR) / "resize_errors.csv"
+
+
+def is_image_file(path: Path) -> bool:
+    return path.suffix.lower() in IMG_EXTS
+
+
+def ensure_dir(p: Path):
+    p.mkdir(parents=True, exist_ok=True)
+
+
+def resize_with_pad_to_rgb(in_path: Path, out_path: Path, size: int, pad_color=(0, 0, 0)):
+    """
+    Open image, convert to RGB, resize with preserved aspect ratio and padding,
+    then save to out_path. Uses high-quality LANCZOS resampling.
+    """
+    with Image.open(in_path) as im:
+        # Convert all images to 3-channel RGB
+        im = im.convert("RGB")
+
+        # Use ImageOps.pad to keep aspect ratio and pad to a square
+        # centering=(0.5, 0.5) centers the content
+        im_padded = ImageOps.pad(
+            im,
+            size=(size, size),
+            method=Image.LANCZOS,
+            color=pad_color,
+            centering=(0.5, 0.5),
+        )
+
+        # Save in the same format family as extension (we’ll respect out_path.suffix)
+        # If suffix is .jpg/.jpeg Pillow needs format="JPEG", etc. Let Pillow infer by suffix.
+        im_padded.save(out_path)
+
+
+def main():
+    in_root = Path(INPUT_DIR)
+    out_root = Path(OUTPUT_DIR)
+    ensure_dir(out_root)
+
+    total = 0
+    processed = 0
+    skipped = 0
+    failed = 0
+
+    # Prepare error log
+    if not ERROR_LOG.parent.exists():
+        ERROR_LOG.parent.mkdir(parents=True, exist_ok=True)
+    with open(ERROR_LOG, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["InputPath", "Reason"])
+
+    print(f"\n=== Resize with Padding ===")
+    print(f"Input : {in_root}")
+    print(f"Output: {out_root}")
+    print(f"Target: {TARGET_SIZE}x{TARGET_SIZE}, pad color={PAD_COLOR}")
+    print(f"Overwrite existing: {OVERWRITE}")
+    print("Walking files...")
+
+    for root, _, files in os.walk(in_root):
+        root_path = Path(root)
+
+        # Mirror the folder structure under OUTPUT_DIR
+        rel = root_path.relative_to(in_root)
+        out_dir = out_root / rel
+        ensure_dir(out_dir)
+
+        for fname in files:
+            total += 1
+            src = root_path / fname
+
+            # Skip non-image files early
+            if not is_image_file(src):
+                skipped += 1
+                continue
+
+            # Output path (preserve same name and extension)
+            dst = out_dir / fname
+
+            if dst.exists() and not OVERWRITE:
+                skipped += 1
+                continue
+
+            try:
+                resize_with_pad_to_rgb(src, dst, TARGET_SIZE, PAD_COLOR)
+                processed += 1
+                if processed % 250 == 0:
+                    print(f"Processed {processed} images...")
+            except Exception as e:
+                failed += 1
+                # Append to error log
+                with open(ERROR_LOG, "a", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow([str(src), repr(e)])
+
+    print("\n=== Done ===")
+    print(f"Total files seen   : {total}")
+    print(f"Processed (resized): {processed}")
+    print(f"Skipped            : {skipped}")
+    print(f"Failed             : {failed}")
+    if failed > 0:
+        print(f"See error log: {ERROR_LOG}")
+
+
+if __name__ == "__main__":
+    main()

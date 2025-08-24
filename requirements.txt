@@ -1,0 +1,27 @@
+System Requirements
+Platforms
+OS: Windows 10/11, Ubuntu 20.04+/22.04, or macOS 13+
+Python: 3.10 or 3.11 (recommended)
+
+Hardware
+CPU: x86-64 (AVX support recommended)
+RAM: ≥ 8 GB (16 GB+ recommended for faster training)
+Disk: ≥ 10 GB free for datasets, caches, and results
+GPU (optional but recommended for CNN):
+NVIDIA T4/RTX or better (Compute Capability ≥ 7.5)
+Matching CUDA/cuDNN for your TensorFlow version
+On Google Colab (T4 GPU) no extra driver setup is required
+
+Network
+Internet access to fetch packages/datasets (first run).
+
+Python Dependencies
+Only list top-level packages in requirements.txt. Subpackages (e.g., tensorflow.keras.layers, sklearn.metrics.pairwise) are included with their parents.
+tensorflow (provides tensorflow.keras & tensorflow.keras.layers)
+numpy
+pandas
+matplotlib
+seaborn
+scikit-learn (provides sklearn.pipeline, sklearn.preprocessing, sklearn.svm, sklearn.model_selection, sklearn.metrics, sklearn.metrics.pairwise)
+xgboost
+Standard library modules (os, math, random) require no installation.

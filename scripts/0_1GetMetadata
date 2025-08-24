@@ -1,0 +1,190 @@
+import os
+import csv
+from datetime import datetime
+from PIL import Image
+import pandas as pd
+import seaborn as sns
+
+# Training Data
+path_Training_data = r"C:\Users\ChandaKK\OneDrive\School\Masters\UP - MIT\Semester 2\COS 801\Assignment\Dataset\train"
+
+folder_names = []
+
+for item in os.listdir(path_Training_data):
+    item_path = os.path.join(path_Training_data, item)
+    if os.path.isdir(item_path):
+        folder_names.append(item)
+
+csv_file = "training_metadata.csv"
+csv_headers = ["FileName", "FileType", "FileSize", "FileDims", "IsSquare", "Label"]
+
+with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
+    writer = csv.writer(file)
+    writer.writerow(csv_headers)
+
+    for folder in folder_names:
+        folder_path = os.path.join(path_Training_data, folder)
+        for filename in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, filename)
+            if os.path.isfile(file_path):
+                file_name = filename
+                file_type = os.path.splitext(filename)[1][1:]
+                file_size = round(os.path.getsize(file_path) / 1024, 2)
+                try:
+                    with Image.open(file_path) as img:
+                        file_dims = f"{img.width}x{img.height}"
+                        is_square = "Y" if img.width == img.height else "N"
+                except Exception:
+                    file_dims = "N/A"
+                    is_square = "N/A"
+                label = folder
+
+                writer.writerow([file_name, file_type, file_size, file_dims, is_square, label])
+                
+import matplotlib.pyplot as plt
+
+# Read the generated CSV
+df = pd.read_csv(csv_file)
+
+# Plot 1: Distribution of Image File Size using Seaborn
+plt.figure(figsize=(8, 6))
+# Check the spread of file sizes to choose the best plot
+if df['FileSize'].nunique() < 30:
+    # If few unique sizes, use countplot (bar plot)
+    sns.countplot(x='FileSize', data=df, color='#4CAF50')
+    plt.xlabel('Image File Size (KB)')
+    plt.ylabel('Count')
+    plt.title('Distribution of Image File Size')
+    plt.xticks(rotation=45)
+else:
+    # If many unique sizes, use histogram
+    sns.histplot(df['FileSize'], bins=30, kde=True, color='#4CAF50')
+    plt.xlabel('Image File Size (KB)')
+    plt.ylabel('Frequency')
+    plt.title('Distribution of Image File Size')
+plt.tight_layout()
+plt.show()
+
+# Plot 2: Pie chart of Y vs N in IsSquare
+plt.figure(figsize=(6, 6))
+is_square_counts = df['IsSquare'].value_counts()
+plt.pie(is_square_counts, labels=is_square_counts.index, autopct='%1.1f%%', colors=['#66b3ff', '#ff9999'], startangle=90)
+plt.title('Proportion of Square (Y) vs Non-Square (N) Images')
+plt.tight_layout()
+plt.show()
+
+# Plot 3: Bar plot showing the spread of training data (counts of each label)
+plt.figure(figsize=(10, 6))
+sns.countplot(x='Label', data=df, order=sorted(df['Label'].unique()), palette='Set2')
+plt.xlabel('Label')
+plt.ylabel('Count')
+plt.title('Training Data: Number of Images per Label')
+plt.xticks(rotation=45, ha='right')
+plt.tight_layout()
+plt.show()
+
+non_square_table = (
+    df.groupby('Label')['IsSquare']
+    .apply(lambda x: (x == 'N').sum() / len(x) * 100)
+    .reset_index(name='PercentNonSquare')
+)
+
+print(non_square_table)
+
+# ...existing code...
+
+import numpy as np
+
+# Classes in order (from the image)
+classes = [
+    "Black-grass", "Charlock", "Cleavers", "Common Chickweed", "Common wheat",
+    "Fat Hen", "Loose Silky-bent", "Maize", "Scentless Mayweed",
+    "Shepherds Purse", "Small-flowered Cranesbill", "Sugar beet"
+]
+
+# Recall scores from the image
+recall_scores = np.array([
+    0.027, 0.898, 0.721, 0.800, 0.514, 0.733, 0.939, 0.610, 0.386, 0.226, 0.756, 0.860
+])
+
+# Get class counts from your training metadata
+class_counts = df['Label'].value_counts().reindex(classes).values
+
+import matplotlib.pyplot as plt
+
+fig, ax1 = plt.subplots(figsize=(12, 6))
+
+color = '#4CAF50'
+ax1.bar(classes, class_counts, color=color, alpha=0.7, label='Training Count')
+ax1.set_xlabel('Class')
+ax1.set_ylabel('Training Count', color=color)
+ax1.tick_params(axis='y', labelcolor=color)
+ax1.set_xticklabels(classes, rotation=45, ha='right')
+
+ax2 = ax1.twinx()
+color = '#2196F3'
+ax2.plot(classes, recall_scores, color=color, marker='o', linewidth=2, label='Recall Score')
+ax2.set_ylabel('Recall Score', color=color)
+ax2.tick_params(axis='y', labelcolor=color)
+ax2.set_ylim(0, 1)
+
+fig.suptitle('Comparison of Training Data Count and Recall Score per Class')
+fig.tight_layout()
+plt.show()
+
+# ------------------- Test Data Section -------------------
+
+# Test Data
+path_Test_data = r"C:\Users\ChandaKK\OneDrive\School\Masters\UP - MIT\Semester 2\COS 801\Assignment\Dataset\test"  # Specify the test data path here
+
+csv_file_test = "test_metadata.csv"
+csv_headers_test = ["FileName", "FileType", "FileSize", "FileDims", "IsSquare"]
+
+if path_Test_data:
+    test_filenames = [f for f in os.listdir(path_Test_data) if os.path.isfile(os.path.join(path_Test_data, f))]
+
+    with open(csv_file_test, mode='w', newline='', encoding='utf-8') as file:
+        writer = csv.writer(file)
+        writer.writerow(csv_headers_test)
+
+        for filename in test_filenames:
+            file_path = os.path.join(path_Test_data, filename)
+            file_name = filename
+            file_type = os.path.splitext(filename)[1][1:]
+            file_size = round(os.path.getsize(file_path) / 1024, 2)
+            try:
+                with Image.open(file_path) as img:
+                    file_dims = f"{img.width}x{img.height}"
+                    is_square = "Y" if img.width == img.height else "N"
+            except Exception:
+                file_dims = "N/A"
+                is_square = "N/A"
+
+            writer.writerow([file_name, file_type, file_size, file_dims, is_square])
+
+    # Read the generated CSV for test data
+    df_test = pd.read_csv(csv_file_test)
+
+    # Plot 1: Distribution of Image File Size using Seaborn
+    plt.figure(figsize=(8, 6))
+    if df_test['FileSize'].nunique() < 30:
+        sns.countplot(x='FileSize', data=df_test, color='#2196F3')
+        plt.xlabel('Image File Size (KB)')
+        plt.ylabel('Count')
+        plt.title('Test Data: Distribution of Image File Size')
+        plt.xticks(rotation=45)
+    else:
+        sns.histplot(df_test['FileSize'], bins=30, kde=True, color='#2196F3')
+        plt.xlabel('Image File Size (KB)')
+        plt.ylabel('Frequency')
+        plt.title('Test Data: Distribution of Image File Size')
+    plt.tight_layout()
+    plt.show()
+
+    # Plot 2: Pie chart of Y vs N in IsSquare
+    plt.figure(figsize=(6, 6))
+    is_square_counts_test = df_test['IsSquare'].value_counts()
+    plt.pie(is_square_counts_test, labels=is_square_counts_test.index, autopct='%1.1f%%', colors=['#66b3ff', '#ff9999'], startangle=90)
+    plt.title('Test Data: Proportion of Square (Y) vs Non-Square (N) Images')
+    plt.tight_layout()
+    plt.show()
